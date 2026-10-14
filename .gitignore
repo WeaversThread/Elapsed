@@ -1,0 +1,12 @@
+# Build output
+.build/
+build/
+
+# macOS / Xcode
+.DS_Store
+xcuserdata/
+*.xcuserstate
+
+# Personal working notes (kept local)
+docs/working-with-endurance.md
+docs/mistakes-and-lessons.md
