@@ -8,37 +8,25 @@ struct TimerSettingsTab: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
-            SettingsSection(title: "Presets", footer: "Click a number to change it. Keys 1–9 pick them in the timer.") {
+            SettingsSection(
+                title: "Presets",
+                footer: "Click the time in the timer to type one: 90, 1:30 — or @14:30 to count down to a time of day."
+            ) {
                 PresetEditor(presets: $store.prefs.presets)
                     .padding(.horizontal, 10)
                     .padding(.vertical, 9)
             }
 
-            SettingsSection(
-                title: "Custom time",
-                footer: "Click the time in the timer to type one: 90, 1:30, 1h30 — or @14:30 to count down to a time of day."
-            ) {
-                SettingsRow(label: "Slider range") {
-                    GlassChoice(options: Preferences.sliderMaxOptions, selection: $store.prefs.sliderMaxMinutes) {
-                        Self.hours($0)
-                    }
-                }
-            }
-
             SettingsSection(title: "When time is up") {
-                SettingsRow(label: "Count overtime", detail: "Shows +0:42 after the timer ends") {
+                SettingsRow(label: "Count overtime (+0:42)") {
                     GlassSwitch(isOn: $store.prefs.overtime)
                 }
                 SettingsDivider()
-                SettingsRow(label: "Snooze", detail: "The +\(store.prefs.snoozeMinutes) button and notification action") {
+                SettingsRow(label: "Snooze") {
                     GlassStepper(value: $store.prefs.snoozeMinutes, range: Preferences.snoozeRange, suffix: " min")
                 }
             }
         }
-    }
-
-    private static func hours(_ minutes: Int) -> String {
-        minutes % 60 == 0 ? "\(minutes / 60) h" : "\(minutes / 60)½ h"
     }
 }
 
@@ -79,7 +67,7 @@ struct LookSettingsTab: View {
             }
 
             SettingsSection(title: "Floating window") {
-                SettingsRow(label: "Progress bars", detail: "The bar slider under the time") {
+                SettingsRow(label: "Show bars") {
                     GlassSwitch(isOn: $store.prefs.windowShowsBars)
                 }
             }
@@ -92,19 +80,13 @@ struct LookSettingsTab: View {
             withAnimation(.spring(duration: 0.2)) { store.prefs.statusStyle = style }
         } label: {
             VStack(spacing: 7) {
-                ZStack {
-                    StatusBarBackground(
-                        style: style,
-                        state: .running,
-                        progress: 0.4,
-                        accent: store.prefs.focusAccent.color
-                    )
-                    Text("14:59")
-                        .font(.system(size: 11, weight: .medium, design: .monospaced))
-                        .foregroundStyle(StatusBarBackground.textColor(style: style, isActive: true))
-                        .shadow(color: style == .progress ? .black.opacity(0.35) : .clear, radius: 1)
-                }
-                .frame(width: 68, height: 18)
+                StatusBarFace(
+                    text: "14:59",
+                    style: style,
+                    state: .running,
+                    progress: 0.4,
+                    accent: store.prefs.focusAccent
+                )
 
                 Text(style.rawValue)
                     .font(.system(size: 10, weight: isSelected ? .semibold : .regular))
@@ -216,24 +198,12 @@ struct GeneralSettingsTab: View {
             }
 
             SettingsSection(title: "When time is up") {
-                SettingsRow(label: "Open the timer", detail: "Show stop and snooze under the menu bar") {
+                SettingsRow(label: "Open timer when done") {
                     GlassSwitch(isOn: $store.prefs.openPopoverOnFinish)
                 }
                 SettingsDivider()
                 SettingsRow(label: "Notifications") {
                     GlassSwitch(isOn: $store.prefs.notifications)
-                }
-            }
-
-            SettingsSection(
-                title: "Shortcuts",
-                footer: "Work from any app. Scripts and launchers can use elapsed://start?min=25, elapsed://toggle, elapsed://stop."
-            ) {
-                ForEach(Array(HotkeyAction.allCases.enumerated()), id: \.element) { index, action in
-                    if index > 0 { SettingsDivider() }
-                    SettingsRow(label: action.title) {
-                        HotkeyRecorder(hotkey: hotkeyBinding(action))
-                    }
                 }
             }
 
@@ -279,23 +249,5 @@ struct GeneralSettingsTab: View {
         withAnimation(.spring(duration: 0.2)) {
             loginStatus = SMAppService.mainApp.status
         }
-    }
-
-    /// Recording a combo that another action already uses moves it here.
-    private func hotkeyBinding(_ action: HotkeyAction) -> Binding<Hotkey?> {
-        Binding(
-            get: { store.prefs.hotkeys[action.rawValue] },
-            set: { newValue in
-                var hotkeys = store.prefs.hotkeys
-                if let newValue {
-                    for (key, existing) in hotkeys
-                    where existing.keyCode == newValue.keyCode && existing.modifiers == newValue.modifiers {
-                        hotkeys[key] = nil
-                    }
-                }
-                hotkeys[action.rawValue] = newValue
-                store.prefs.hotkeys = hotkeys
-            }
-        )
     }
 }

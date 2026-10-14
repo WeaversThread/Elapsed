@@ -1,5 +1,3 @@
-import AppKit
-import Carbon.HIToolbox
 import SwiftUI
 
 // MARK: - Layout
@@ -326,93 +324,5 @@ private struct PresetChip: View {
         }
         // Rejected or unchanged: show the real value again.
         text = "\(minutes)"
-    }
-}
-
-// MARK: - Shortcut recorder
-
-/// Click, then press a combo with ⌘, ⌥ or ⌃ (or an F-key). Esc cancels, ⌫ clears.
-struct HotkeyRecorder: View {
-    @Binding var hotkey: Hotkey?
-
-    @State private var isRecording = false
-    @State private var monitor: Any?
-
-    var body: some View {
-        HStack(spacing: 6) {
-            if hotkey != nil && !isRecording {
-                HoverButton {
-                    hotkey = nil
-                } label: {
-                    Image(systemName: "xmark")
-                        .font(.system(size: 7, weight: .bold))
-                        .foregroundStyle(Color.white.opacity(0.3))
-                        .frame(width: 16, height: 16)
-                }
-                .accessibilityLabel("Clear shortcut")
-            }
-
-            HoverButton {
-                isRecording ? stopRecording() : startRecording()
-            } label: {
-                Text(isRecording ? "press keys" : (hotkey?.display ?? "record"))
-                    .font(.system(size: 11, weight: hotkey == nil || isRecording ? .regular : .medium))
-                    .foregroundStyle(Color.white.opacity(isRecording ? 0.85 : (hotkey == nil ? 0.35 : 0.75)))
-                    .frame(minWidth: 72)
-                    .padding(.horizontal, 8)
-                    .padding(.vertical, 4)
-                    .background(Capsule().fill(Color.white.opacity(isRecording ? 0.16 : 0.08)))
-            }
-        }
-        .onDisappear { stopRecording() }
-    }
-
-    private func startRecording() {
-        isRecording = true
-        HotkeyManager.shared.suspend()
-        monitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { event in
-            record(event)
-            return nil
-        }
-    }
-
-    private func stopRecording() {
-        if let monitor {
-            NSEvent.removeMonitor(monitor)
-        }
-        monitor = nil
-        if isRecording {
-            isRecording = false
-            HotkeyManager.shared.resume()
-        }
-    }
-
-    private func record(_ event: NSEvent) {
-        let code = Int(event.keyCode)
-        switch code {
-        case kVK_Escape:
-            stopRecording()
-            return
-        case kVK_Delete, kVK_ForwardDelete:
-            hotkey = nil
-            stopRecording()
-            return
-        default:
-            break
-        }
-
-        let flags = event.modifierFlags.intersection([.command, .option, .control, .shift])
-        let isFunctionKey = HotkeyManager.functionKeys[code] != nil
-        guard !flags.subtracting(.shift).isEmpty || isFunctionKey else {
-            NSSound.beep()
-            return
-        }
-
-        hotkey = Hotkey(
-            keyCode: UInt32(code),
-            modifiers: HotkeyManager.carbonModifiers(flags),
-            display: HotkeyManager.symbols(flags) + HotkeyManager.keyName(event)
-        )
-        stopRecording()
     }
 }

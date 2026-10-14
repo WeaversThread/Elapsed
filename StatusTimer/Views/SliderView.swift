@@ -15,7 +15,7 @@ struct TimerSliderView: View {
     @State private var customTimeText = ""
     @FocusState private var isCustomInputFocused: Bool
 
-    private var maxSliderMinutes: Int { store.prefs.sliderMaxMinutes }
+    private let maxSliderMinutes = 120
     private let barCount = 60
     private let barWidth: CGFloat = 2
     private let barHeightMin: CGFloat = 8

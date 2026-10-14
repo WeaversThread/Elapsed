@@ -9,44 +9,19 @@ struct StatusBarLabel: View {
         engine.state == .running || engine.state == .paused || engine.state == .finished
     }
 
-    private var style: StatusStyle {
-        store.prefs.statusStyle
-    }
-
     var body: some View {
-        ZStack {
-            StatusBarBackground(
-                style: style,
-                state: engine.state,
-                progress: engine.state == .finished ? 1 : engine.progress,
-                accent: store.prefs.accent(for: engine.currentSegmentKind),
-                pauseBlink: pauseBlink
-            )
-
-            Text(isActive ? engine.displayTime : engine.idleDisplayTime)
-                .font(.system(size: 11, weight: isActive ? .medium : .regular, design: .monospaced))
-                .foregroundStyle(StatusBarBackground.textColor(style: style, isActive: isActive))
-                .shadow(color: style == .progress && isActive ? .black.opacity(0.35) : .clear, radius: 1)
-                .opacity(textOpacity)
-                .minimumScaleFactor(0.6)
-                .lineLimit(1)
-        }
-        .frame(width: 68, height: 18)
-        .contentTransition(.numericText())
+        StatusBarFace(
+            text: isActive ? engine.displayTime : engine.idleDisplayTime,
+            style: store.prefs.statusStyle,
+            state: engine.state,
+            progress: engine.state == .finished ? 1 : engine.progress,
+            accent: engine.currentSegmentKind == .rest ? store.prefs.restAccent : store.prefs.focusAccent,
+            pauseBlink: pauseBlink
+        )
         .animation(.spring(duration: 0.25), value: engine.state)
         .onAppear { updateBlink(engine.state) }
         .onChange(of: engine.state) { _, newState in
             updateBlink(newState)
-        }
-    }
-
-    /// Minimal has no capsule to blink, so the text does it.
-    private var textOpacity: Double {
-        guard style == .minimal else { return 1 }
-        switch engine.state {
-        case .paused: return pauseBlink ? 0.85 : 0.4
-        case .idle:   return 0.6
-        default:      return 1
         }
     }
 
@@ -57,56 +32,69 @@ struct StatusBarLabel: View {
     }
 }
 
-/// The capsule behind the menu bar time, in each of the three styles.
-/// Also drawn as a preview in the Look settings.
-struct StatusBarBackground: View {
+/// The menu bar time in its capsule, in either style. Follows the menu bar:
+/// white on a dark one, black on a light one. Also drawn as a preview in Look settings.
+struct StatusBarFace: View {
+    let text: String
     let style: StatusStyle
     let state: TimerState
     let progress: Double
-    let accent: Color
+    let accent: Accent
     var pauseBlink = false
 
+    @Environment(\.colorScheme) private var colorScheme
+
+    private var isDark: Bool { colorScheme == .dark }
     private var isActive: Bool { state != .idle }
+    private var ink: Color { isDark ? .white : .black }
 
     var body: some View {
-        switch style {
-        case .capsule:
-            if isActive {
-                Capsule().fill(Color.white.opacity(
-                    state == .paused ? (pauseBlink ? 0.5 : 0.3) : 0.85
-                ))
-            } else {
-                idleOutline
-            }
-        case .progress:
-            if isActive {
-                // Fills with the accent as time elapses.
-                GeometryReader { geo in
-                    ZStack(alignment: .leading) {
-                        Rectangle().fill(Color.white.opacity(0.18))
-                        Rectangle()
-                            .fill(accent.opacity(state == .paused ? (pauseBlink ? 0.75 : 0.45) : 0.75))
-                            .frame(width: geo.size.width * min(max(progress, 0), 1))
-                    }
+        Group {
+            if !isActive {
+                ZStack {
+                    Capsule().strokeBorder(Color(white: isDark ? 0.7 : 0.3).opacity(0.5), lineWidth: 1)
+                    label(Color(white: isDark ? 0.85 : 0.15))
                 }
-                .clipShape(Capsule())
+            } else if style == .capsule {
+                ZStack {
+                    Capsule().fill(ink.opacity(
+                        state == .paused ? (pauseBlink ? 0.5 : 0.3) : (isDark ? 0.85 : 0.8)
+                    ))
+                    label(isDark ? Color(white: 0.08) : .white)
+                }
             } else {
-                idleOutline
+                progressFace
             }
-        case .minimal:
-            Color.clear
         }
+        .frame(width: 68, height: 18)
+        .contentTransition(.numericText())
     }
 
-    private var idleOutline: some View {
-        Capsule().strokeBorder(Color(white: 0.7).opacity(0.5), lineWidth: 1)
+    /// The accent fills left to right as time elapses; the text flips color where the fill passes.
+    private var progressFace: some View {
+        GeometryReader { geo in
+            let filled = geo.size.width * min(max(progress, 0), 1)
+            ZStack(alignment: .leading) {
+                Rectangle().fill(ink.opacity(0.18))
+                Rectangle()
+                    .fill(accent.color.opacity(state == .paused ? (pauseBlink ? 0.75 : 0.45) : 0.8))
+                    .frame(width: filled)
+                label(ink.opacity(0.95))
+                label(accent.isLight ? Color(white: 0.08) : .white)
+                    .mask(alignment: .leading) {
+                        Rectangle().frame(width: filled)
+                    }
+            }
+        }
+        .clipShape(Capsule())
     }
 
-    static func textColor(style: StatusStyle, isActive: Bool) -> Color {
-        switch style {
-        case .capsule:  isActive ? Color(white: 0.08) : Color(white: 0.85)
-        case .progress: Color(white: isActive ? 0.97 : 0.85)
-        case .minimal:  Color(white: 0.92)
-        }
+    private func label(_ color: Color) -> some View {
+        Text(text)
+            .font(.system(size: 11, weight: isActive ? .medium : .regular, design: .monospaced))
+            .foregroundStyle(color)
+            .minimumScaleFactor(0.6)
+            .lineLimit(1)
+            .frame(maxWidth: .infinity)
     }
 }

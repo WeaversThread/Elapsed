@@ -5,7 +5,6 @@ import SwiftUI
 struct Preferences: Codable, Equatable {
     // Timer
     var presets: [Int] = [5, 10, 15, 25, 30, 45, 60]
-    var sliderMaxMinutes: Int = 120
     var snoozeMinutes: Int = 5
     var overtime: Bool = true
 
@@ -25,19 +24,17 @@ struct Preferences: Codable, Equatable {
     // General
     var openPopoverOnFinish: Bool = true
     var notifications: Bool = true
-    var hotkeys: [String: Hotkey] = [:]
 
-    static let sliderMaxOptions = [60, 90, 120, 180]
     static let presetCountRange = 3...9
     static let snoozeRange = 1...60
 
     init() {}
 
     private enum CodingKeys: String, CodingKey {
-        case presets, sliderMaxMinutes, snoozeMinutes, overtime
+        case presets, snoozeMinutes, overtime
         case focusAccent, restAccent, statusStyle, showPresets, showPlaylists, windowShowsBars
         case alarmSound, alarmVolume, alarmLength
-        case openPopoverOnFinish, notifications, hotkeys
+        case openPopoverOnFinish, notifications
     }
 
     init(from decoder: Decoder) throws {
@@ -47,7 +44,6 @@ struct Preferences: Codable, Equatable {
             (try? c.decodeIfPresent(T.self, forKey: key)) ?? fallback
         }
         presets = Self.normalizedPresets(value(.presets, d.presets))
-        sliderMaxMinutes = value(.sliderMaxMinutes, d.sliderMaxMinutes)
         snoozeMinutes = value(.snoozeMinutes, d.snoozeMinutes)
         overtime = value(.overtime, d.overtime)
         focusAccent = value(.focusAccent, d.focusAccent)
@@ -61,7 +57,6 @@ struct Preferences: Codable, Equatable {
         alarmLength = value(.alarmLength, d.alarmLength)
         openPopoverOnFinish = value(.openPopoverOnFinish, d.openPopoverOnFinish)
         notifications = value(.notifications, d.notifications)
-        hotkeys = value(.hotkeys, d.hotkeys)
     }
 
     func accent(for kind: SegmentKind) -> Color {
@@ -96,10 +91,15 @@ enum Accent: String, Codable, CaseIterable, Identifiable {
         case .white:  .white
         }
     }
+
+    /// Bright enough that text on top of it needs to be dark.
+    var isLight: Bool {
+        self == .yellow || self == .white
+    }
 }
 
 enum StatusStyle: String, Codable, CaseIterable, Identifiable {
-    case capsule, progress, minimal
+    case capsule, progress
 
     var id: String { rawValue }
 }
@@ -133,27 +133,4 @@ enum AlarmLength: String, Codable, CaseIterable, Identifiable {
         case .once, .untilStopped: nil
         }
     }
-}
-
-// MARK: - Shortcuts
-
-enum HotkeyAction: String, Codable, CaseIterable, Identifiable {
-    case toggle, openPopover, stop
-
-    var id: String { rawValue }
-
-    var title: String {
-        switch self {
-        case .toggle:      "Start / pause"
-        case .openPopover: "Open timer"
-        case .stop:        "Stop"
-        }
-    }
-}
-
-struct Hotkey: Codable, Equatable {
-    var keyCode: UInt32
-    /// Carbon modifier mask (cmdKey, optionKey, …).
-    var modifiers: UInt32
-    var display: String
 }

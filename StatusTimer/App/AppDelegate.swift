@@ -33,7 +33,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         setupPopover()
         setupCallbacks()
         setupNotifications()
-        setupHotkeys()
         isLaunched = true
         pendingURLs.forEach(handleURL)
         pendingURLs = []
@@ -101,17 +100,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                     self?.audio.stop()
                 }
             }
-            .store(in: &cancellables)
-    }
-
-    private func setupHotkeys() {
-        HotkeyManager.shared.onAction = { [weak self] action in
-            self?.performHotkey(action)
-        }
-        store.$prefs
-            .map(\.hotkeys)
-            .removeDuplicates()
-            .sink { HotkeyManager.shared.register($0) }
             .store(in: &cancellables)
     }
 
@@ -213,19 +201,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         return true
     }
 
-    // MARK: - Shortcuts
-
-    private func performHotkey(_ action: HotkeyAction) {
-        switch action {
-        case .toggle:
-            engine.toggleFromStatusBar()
-        case .openPopover:
-            if popover.isShown { closePopover() } else { openPopover() }
-        case .stop:
-            engine.cancel()
-        }
-    }
-
     // MARK: - Timer Window
 
     private func toggleTimerWindow() {
@@ -262,15 +237,18 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     func openSettings() {
         closePopover()
         if settingsWindow == nil {
-            settingsWindow = GlassWindow.make(
+            // Floats so it can't get lost behind other apps: there's no Dock icon to bring it back.
+            let w = GlassWindow.make(
                 size: NSSize(width: 380, height: 460),
                 resizable: false,
-                level: .normal,
+                level: .floating,
                 content: SettingsView(audio: audio, onClose: { [weak self] in
                     self?.settingsWindow?.close()
                 })
                 .environmentObject(store)
             )
+            w.collectionBehavior = [.moveToActiveSpace, .fullScreenAuxiliary]
+            settingsWindow = w
         }
         NSApp.activate(ignoringOtherApps: true)
         settingsWindow?.makeKeyAndOrderFront(nil)
@@ -278,8 +256,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     // MARK: - URL scheme
 
-    /// elapsed://start?min=25, start?until=14:30, toggle, pause, resume, stop, snooze, next,
-    /// playlist?name=Pomodoro, open, window, settings
+    /// elapsed://start, start?min=25, start?until=14:30, toggle, stop, snooze, playlist?name=Pomodoro
     func application(_ application: NSApplication, open urls: [URL]) {
         guard isLaunched else {
             pendingURLs += urls
@@ -305,7 +282,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 if case .until(let date)? = TimeInputParser.parse("@" + until) {
                     engine.start(until: date)
                 }
-            } else if let text = param("min") ?? param("time") {
+            } else if let text = param("min") {
                 if case .minutes(let minutes)? = TimeInputParser.parse(text) {
                     engine.start(minutes: minutes)
                 }
@@ -314,24 +291,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             }
         case "toggle":
             engine.toggleFromStatusBar()
-        case "pause":
-            engine.pause()
-        case "resume":
-            engine.resume()
-        case "stop", "cancel":
+        case "stop":
             engine.cancel()
         case "snooze":
             engine.snooze()
-        case "next":
-            if engine.isPlaylistActive { engine.advancePlaylist() }
         case "playlist":
             if let name = param("name") { engine.startPlaylist(named: name) }
-        case "open":
-            openPopover()
-        case "window":
-            toggleTimerWindow()
-        case "settings":
-            openSettings()
         default:
             break
         }

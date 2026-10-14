@@ -25,6 +25,8 @@ final class TimerEngine: ObservableObject {
     @Published private(set) var endDate: Date?
 
     private(set) var activePlaylist: Playlist?
+    /// Overtime stops counting after an hour, so a forgotten timer doesn't tick all night.
+    static let overtimeLimit: TimeInterval = 3600
     private var timerCancellable: AnyCancellable?
     private var pausedRemaining: TimeInterval = 0
     private var finishedAt: Date?
@@ -50,10 +52,6 @@ final class TimerEngine: ObservableObject {
 
     var isBreakSegment: Bool {
         currentSegmentKind == .rest
-    }
-
-    var isPlaylistActive: Bool {
-        activePlaylist != nil
     }
 
     var nextSegmentIndex: Int? {
@@ -248,10 +246,11 @@ final class TimerEngine: ObservableObject {
         persist()
     }
 
-    private func startTicking() {
+    /// 0.25 s with App Nap held off while counting down; overtime is a lazy 1 s tick.
+    private func startTicking(every interval: TimeInterval = 0.25, holdActivity: Bool = true) {
         timerCancellable?.cancel()
-        beginActivity()
-        timerCancellable = Timer.publish(every: 0.25, on: .main, in: .common)
+        if holdActivity { beginActivity() }
+        timerCancellable = Timer.publish(every: interval, on: .main, in: .common)
             .autoconnect()
             .sink { [weak self] now in
                 self?.tick(now)
@@ -275,9 +274,9 @@ final class TimerEngine: ObservableObject {
                 remainingSeconds = remaining
             }
         case .finished:
-            if let finishedAt {
-                overtimeSeconds = max(0, now.timeIntervalSince(finishedAt))
-            }
+            guard let finishedAt else { return }
+            overtimeSeconds = min(max(0, now.timeIntervalSince(finishedAt)), Self.overtimeLimit)
+            if overtimeSeconds >= Self.overtimeLimit { stopTicking() }
         case .idle, .paused:
             break
         }
@@ -298,9 +297,10 @@ final class TimerEngine: ObservableObject {
         }
 
         finishedAt = end
-        overtimeSeconds = max(0, Date().timeIntervalSince(end))
+        overtimeSeconds = min(max(0, Date().timeIntervalSince(end)), Self.overtimeLimit)
         state = .finished
-        if !store.prefs.overtime { stopTicking() }
+        stopTicking()
+        if store.prefs.overtime { startTicking(every: 1, holdActivity: false) }
         persist()
         onTimerComplete?(TimerCompletion(label: currentSegmentLabel, next: nextSegment, autoAdvanced: false))
     }

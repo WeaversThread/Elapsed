@@ -116,10 +116,8 @@ struct PlaylistsSettingsTab: View {
                     }
                     .buttonStyle(.plain)
 
-                    optionRow("Auto-advance", detail: "Start the next segment without waiting",
-                              isOn: playlistBinding(id, \.autoAdvance, fallback: false))
-                    optionRow("Repeat", detail: "Start over after the last segment",
-                              isOn: playlistBinding(id, \.repeats, fallback: false))
+                    optionRow("Auto-advance", isOn: playlistBinding(id, \.autoAdvance, fallback: false))
+                    optionRow("Repeat", isOn: playlistBinding(id, \.repeats, fallback: false))
                 }
                 .padding(.horizontal, 10)
                 .padding(.bottom, 8)
@@ -144,11 +142,16 @@ struct PlaylistsSettingsTab: View {
                     kind.wrappedValue = kind.wrappedValue == .focus ? .rest : .focus
                 }
             } label: {
-                Circle()
-                    .fill(store.prefs.accent(for: segment.kind).opacity(0.8))
-                    .frame(width: 7, height: 7)
-                    .frame(width: 14, height: 14)
-                    .contentShape(Rectangle())
+                HStack(spacing: 4) {
+                    Circle()
+                        .fill(store.prefs.accent(for: segment.kind).opacity(0.8))
+                        .frame(width: 7, height: 7)
+                    Text(segment.kind == .focus ? "focus" : "rest")
+                        .font(.system(size: 9))
+                        .foregroundStyle(Color.white.opacity(0.35))
+                }
+                .frame(width: 44, alignment: .leading)
+                .contentShape(Rectangle())
             }
             .accessibilityLabel(segment.kind == .focus ? "Focus" : "Rest")
 
@@ -157,10 +160,6 @@ struct PlaylistsSettingsTab: View {
                 .font(.system(size: 11))
                 .foregroundStyle(Color.white.opacity(0.7))
                 .frame(maxWidth: .infinity, alignment: .leading)
-
-            Text(segment.kind == .focus ? "focus" : "rest")
-                .font(.system(size: 9))
-                .foregroundStyle(Color.white.opacity(0.25))
 
             TextField("Min", value: segmentBinding(playlistID, segment.id, \.minutes, fallback: 25), format: .number)
                 .textFieldStyle(.plain)
@@ -191,16 +190,11 @@ struct PlaylistsSettingsTab: View {
         .clipShape(RoundedRectangle(cornerRadius: 3))
     }
 
-    private func optionRow(_ label: String, detail: String, isOn: Binding<Bool>) -> some View {
+    private func optionRow(_ label: String, isOn: Binding<Bool>) -> some View {
         HStack(spacing: 8) {
-            VStack(alignment: .leading, spacing: 1) {
-                Text(label)
-                    .font(.system(size: 11))
-                    .foregroundStyle(Color.white.opacity(0.7))
-                Text(detail)
-                    .font(.system(size: 9))
-                    .foregroundStyle(Color.white.opacity(0.3))
-            }
+            Text(label)
+                .font(.system(size: 11))
+                .foregroundStyle(Color.white.opacity(0.7))
             Spacer()
             GlassSwitch(isOn: isOn)
         }
