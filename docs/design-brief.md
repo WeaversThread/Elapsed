@@ -45,7 +45,7 @@ All colors are white at varying opacities on dark glass. The only hue is functio
 
 ### Status Bar States
 
-Three styles, chosen in Settings › Look. Idle is the same outline in Capsule and Progress.
+Two styles, chosen in Settings › Look. Idle is the same outline in both. Colors follow the menu bar: the values below are for a dark menu bar; on a light one, white and black swap (idle stroke `white(0.3)`, text `white(0.15)`, running fill `black @ 0.8` with white text).
 
 **Capsule** (default)
 
@@ -56,9 +56,7 @@ Three styles, chosen in Settings › Look. Idle is the same outline in Capsule a
 | Paused | Blink `white @ 0.3` / `white @ 0.5` | `white(0.08)` (dark) |
 | Finished | Fill `white @ 0.85` | `white(0.08)` (dark), shows "+0:42" overtime or "0:00" |
 
-**Progress** — track `white @ 0.18`; the accent (`@ 0.75`) fills left to right as time elapses; paused blinks the fill; finished is fully filled. Text `white(0.97)` with a 1px dark shadow.
-
-**Minimal** — text only, no capsule. Idle `@ 0.6`, paused blinks the text.
+**Progress** — track `ink @ 0.18`; the accent (`@ 0.8`) fills left to right as time elapses; paused blinks the fill; finished is fully filled. The text flips where the fill passes: `ink @ 0.95` over the track, white over the accent (dark over yellow or white accents).
 
 ---
 
@@ -165,10 +163,10 @@ Fixed frame: 72x22 (item), 68x18 (capsule). Text auto-shrinks with `minimumScale
 Borderless + resizable. Custom close button (x icon, appears on hover). No titlebar, no traffic lights. Movable by background. Floats above all windows. Content clips to `RoundedRectangle(cornerRadius: 10)` with subtle border stroke.
 
 ### Glass Window
-`GlassWindow`: borderless `NSWindow` subclass with `canBecomeKey = true` (so text fields take typing), clear background, dark appearance, ⌘W and Esc close it. The floating timer window (`.floating`, frame autosaved) and the settings window (`.normal`) are both made by `GlassWindow.make`.
+`GlassWindow`: borderless `NSWindow` subclass with `canBecomeKey = true` (so text fields take typing), clear background, dark appearance, ⌘W and Esc close it. The floating timer window (frame autosaved) and the settings window are both made by `GlassWindow.make`, both at `.floating` level.
 
 ### Settings Window
-380×460 glass panel, rounded 10, `white @ 0.12` border, hover-revealed close button top-left. A text tab row (Timer · Playlists · Look · Sound · General): selected `white @ 0.85` semibold, others `white @ 0.35`. Changes apply immediately — no Save, no Cancel.
+380×460 glass panel, rounded 10, `white @ 0.12` border, hover-revealed close button top-left. A text tab row (Timer · Playlists · Look · Sound · General): selected `white @ 0.85` semibold, others `white @ 0.35`. Changes apply immediately — no Save, no Cancel. Floats above other windows, since there's no Dock icon to bring it back. Labels explain themselves; hint text is a last resort (one footer, for `@14:30`).
 
 Building blocks:
 - **SettingsSection** — title, then rows on `white @ 0.06` rounded 6, optional footer `white @ 0.3`
@@ -179,7 +177,6 @@ Building blocks:
 - **SwatchPicker** — 14pt accent circles, selected ringed `white @ 0.85`
 - **VolumeBars** — a rising wedge of 24 bars, the slider's language at small scale
 - **PresetEditor** — 30pt capsule chips you type into, × on hover, + to add (3–9)
-- **HotkeyRecorder** — capsule that reads "press keys" while recording
 
 ### Scrub Bar
 Vertical, 6px wide, 40px tall. Track: 1px `white @ 0.08`. Thumb: 3px wide rounded rect, `white @ 0.35`, appears on hover. Maps drag position to scroll target.
@@ -223,7 +220,8 @@ Vertical, 6px wide, 40px tall. Track: 1px `white @ 0.08`. Thumb: 3px wide rounde
 ### State Management
 - Single `ObservableObject` engine, `@MainActor`
 - `@Published` for all reactive state
-- Combine `Timer.publish` at 0.25s for countdown (Date-based elapsed, not decrement)
+- Combine `Timer.publish` at 0.25s for countdown (Date-based elapsed, not decrement), with App Nap held off while running
+- Overtime ticks at 1s without holding off App Nap, and stops after an hour
 - Callbacks (closures) for cross-layer communication (engine -> AppDelegate)
 
 ### Persistence
@@ -237,8 +235,7 @@ Vertical, 6px wide, 40px tall. Track: 1px `white @ 0.08`. Thumb: 3px wide rounde
 - NSPopover (transient, no animation) for menu
 - NSWindow (borderless, floating) for desktop view
 - SMAppService for login item, toggled in Settings (never registered automatically)
-- Carbon `RegisterEventHotKey` for global shortcuts (no Accessibility permission)
-- `elapsed://` URL scheme for automation
+- `elapsed://` URL scheme for automation and system-wide shortcuts (via Shortcuts, Raycast, …) — no built-in hotkey recorder
 
 ### Build
 - Swift Package Manager, no Xcode project

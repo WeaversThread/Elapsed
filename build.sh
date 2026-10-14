@@ -1,15 +1,18 @@
 #!/bin/bash
-# Usage: bash build.sh [--install] [--zip]
+# Usage: bash build.sh [--test] [--install] [--zip]
+#   --test     run the tests instead of building the app
 #   --install  quit Elapsed, replace /Applications/Elapsed.app, relaunch
 #   --zip      also write build/Elapsed-<version>.zip for a release
 set -e
 
 cd "$(dirname "$0")"
 
+TEST=0
 INSTALL=0
 ZIP=0
 for arg in "$@"; do
     case "$arg" in
+        --test)    TEST=1 ;;
         --install) INSTALL=1 ;;
         --zip)     ZIP=1 ;;
         *) echo "Unknown option: $arg"; exit 1 ;;
@@ -19,8 +22,8 @@ done
 # Command Line Tools 27 don't ship the SwiftUI macro plugin the macOS 27 SDK needs
 # (@State fails with "SwiftUIMacros.StateMacro could not be found"), so build
 # against the 26 SDK when only the CLT are installed.
+DEV_DIR="$(xcode-select -p 2>/dev/null || true)"
 if [ -z "$SDKROOT" ]; then
-    DEV_DIR="$(xcode-select -p 2>/dev/null || true)"
     if [[ "$DEV_DIR" == *CommandLineTools* ]]; then
         for sdk in "$DEV_DIR/SDKs/MacOSX26.5.sdk" "$DEV_DIR/SDKs/MacOSX26.sdk"; do
             if [ -d "$sdk" ]; then
@@ -29,6 +32,17 @@ if [ -z "$SDKROOT" ]; then
             fi
         done
     fi
+fi
+
+if [ "$TEST" = 1 ]; then
+    # The CLT keep the Swift Testing macro plugin in a folder SwiftPM doesn't search.
+    TESTING_PLUGINS="$DEV_DIR/usr/lib/swift/host/plugins/testing"
+    if [ -d "$TESTING_PLUGINS" ]; then
+        swift test -Xswiftc -plugin-path -Xswiftc "$TESTING_PLUGINS"
+    else
+        swift test
+    fi
+    exit
 fi
 
 echo "Building Elapsed..."

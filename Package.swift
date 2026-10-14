@@ -21,5 +21,10 @@ let package = Package(
                 ]),
             ]
         ),
+        .testTarget(
+            name: "ElapsedTests",
+            dependencies: ["Elapsed"],
+            path: "Tests/ElapsedTests"
+        ),
     ]
 )
