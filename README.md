@@ -12,7 +12,8 @@ A Dieter Rams–inspired menu bar timer for macOS. Dark glass, Helvetica Neue Th
 - **Playlists.** Sequences of focus and rest segments (Pomodoro and friends), with optional auto-advance and repeat.
 - **Floating window.** A resizable glass window that stays above everything else and remembers where you put it.
 - **Survives restarts.** A running or paused timer picks up where it left off after a quit, crash or update.
-- **Settings** (gear icon or ⌘,): your own presets, focus and rest colors, two menu bar styles, alarm sound, volume and length, notifications and launch at login.
+- **Settings** (gear icon or ⌘,): your own presets, focus and rest colors, two menu bar styles, alarm sound, volume and length, notifications, launch at login and global shortcuts.
+- **Light on the battery.** No polling: it wakes once a second while counting down (not at all while the screen is off), and uses no CPU when idle.
 
 ## Keyboard
 
@@ -26,7 +27,7 @@ In the timer popover:
 | ⌘, | Settings |
 | ⌘Q | Quit |
 
-For a shortcut that works in any app, make a shortcut in the Shortcuts app that opens `elapsed://toggle` and give it a keyboard shortcut (or bind the URL in Raycast, Alfred or BetterTouchTool).
+Global shortcuts for start/pause, open and stop can be recorded in Settings › General. They work from any app and need no Accessibility permission.
 
 ## URL scheme
 

@@ -105,7 +105,7 @@ All numeric displays use `.monospacedDigit()` to prevent layout jitter.
 | Slider bar grow effect | Spring | 0.3s | 0.15 |
 | Window hover controls | Spring | 0.3s | 0.2 |
 | Timer countdown tick | Linear | 0.1s | - |
-| Pause blink | EaseInOut | 1.0s | repeating |
+| Pause breath | Sine, 15 fps | 2s period | 3 breaths, then a hard 1s step |
 | Hover reveal (scrub, close) | EaseInOut | 0.15s | - |
 | Popover open/close | None | instant | - |
 
@@ -154,7 +154,9 @@ Used on every surface — popover, settings window, floating window. Never a sol
 Scale: 1.0 -> 1.08, Brightness: 0 -> +0.15, Spring 0.2s bounce 0.3. Applied to every interactive element. No exceptions.
 
 ### Status Bar Capsule
-Fixed frame: 72x22 (item), 68x18 (capsule). Text auto-shrinks with `minimumScaleFactor(0.6)`. Monospaced. The icon never grows or shifts — only the text inside scales.
+Fixed frame: 72x22 (item), 68x18 (capsule). Monospaced, centered on the digits' cap height, shrinking in 0.5pt steps down to 6.5pt to fit. The icon never grows or shifts — only the text inside scales.
+
+Drawn with Core Graphics and Core Text into an image (`StatusBarFace`), not SwiftUI: the menu bar re-snapshots the item on every change, and an image snapshots cheaply. It's redrawn only when what it shows changes, and the image draws on demand so each display's menu bar gets its own light or dark colors. No continuous animations in the menu bar — every frame costs a snapshot.
 
 ### Slider (Bar Array)
 60 bars, 2px wide, corner radius 1. Height range: 8-24px. Grow effect: bars near the thumb position grow taller with `growRadius: 5`. No thumb dot — the bar heights ARE the indicator.
@@ -220,8 +222,10 @@ Vertical, 6px wide, 40px tall. Track: 1px `white @ 0.08`. Thumb: 3px wide rounde
 ### State Management
 - Single `ObservableObject` engine, `@MainActor`
 - `@Published` for all reactive state
-- Combine `Timer.publish` at 0.25s for countdown (Date-based elapsed, not decrement), with App Nap held off while running
+- No polling: one precise timer fires at the end; a 1s display tick lines up with the second boundaries (Date-based, not decrement). App Nap is held off only while counting down
+- Display ticks stop while the screens sleep or the session is inactive; the end timer keeps running
 - Overtime ticks at 1s without holding off App Nap, and stops after an hour
+- The popover's content exists only while it's open; closed windows are released
 - Callbacks (closures) for cross-layer communication (engine -> AppDelegate)
 
 ### Persistence
@@ -231,11 +235,12 @@ Vertical, 6px wide, 40px tall. Track: 1px `white @ 0.08`. Thumb: 3px wide rounde
 
 ### App Structure
 - LSUIElement (no dock icon)
-- NSStatusItem + NSHostingView for status bar
+- NSStatusItem with an image drawn by `StatusItemController` for the status bar
 - NSPopover (transient, no animation) for menu
 - NSWindow (borderless, floating) for desktop view
 - SMAppService for login item, toggled in Settings (never registered automatically)
-- `elapsed://` URL scheme for automation and system-wide shortcuts (via Shortcuts, Raycast, …) — no built-in hotkey recorder
+- Carbon `RegisterEventHotKey` for global shortcuts (no Accessibility permission)
+- `elapsed://` URL scheme for automation
 
 ### Build
 - Swift Package Manager, no Xcode project

@@ -24,6 +24,7 @@ struct Preferences: Codable, Equatable {
     // General
     var openPopoverOnFinish: Bool = true
     var notifications: Bool = true
+    var hotkeys: [String: Hotkey] = [:]
 
     static let presetCountRange = 3...9
     static let snoozeRange = 1...60
@@ -34,7 +35,7 @@ struct Preferences: Codable, Equatable {
         case presets, snoozeMinutes, overtime
         case focusAccent, restAccent, statusStyle, showPresets, showPlaylists, windowShowsBars
         case alarmSound, alarmVolume, alarmLength
-        case openPopoverOnFinish, notifications
+        case openPopoverOnFinish, notifications, hotkeys
     }
 
     init(from decoder: Decoder) throws {
@@ -57,6 +58,7 @@ struct Preferences: Codable, Equatable {
         alarmLength = value(.alarmLength, d.alarmLength)
         openPopoverOnFinish = value(.openPopoverOnFinish, d.openPopoverOnFinish)
         notifications = value(.notifications, d.notifications)
+        hotkeys = value(.hotkeys, d.hotkeys)
     }
 
     func accent(for kind: SegmentKind) -> Color {
@@ -90,6 +92,22 @@ enum Accent: String, Codable, CaseIterable, Identifiable {
         case .violet: .purple
         case .white:  .white
         }
+    }
+
+    /// The same colors for Core Graphics, matching the system colors in each appearance.
+    func cgColor(isDark: Bool, alpha: CGFloat) -> CGColor {
+        let rgb: (CGFloat, CGFloat, CGFloat)
+        switch self {
+        case .red:    rgb = isDark ? (255, 69, 58) : (255, 59, 48)
+        case .orange: rgb = (245, 107, 26)
+        case .yellow: rgb = (250, 199, 46)
+        case .green:  rgb = isDark ? (48, 209, 88) : (52, 199, 89)
+        case .teal:   rgb = isDark ? (64, 200, 224) : (48, 176, 199)
+        case .blue:   rgb = isDark ? (10, 132, 255) : (0, 122, 255)
+        case .violet: rgb = isDark ? (191, 90, 242) : (175, 82, 222)
+        case .white:  rgb = (255, 255, 255)
+        }
+        return CGColor(srgbRed: rgb.0 / 255, green: rgb.1 / 255, blue: rgb.2 / 255, alpha: alpha)
     }
 
     /// Bright enough that text on top of it needs to be dark.
@@ -133,4 +151,27 @@ enum AlarmLength: String, Codable, CaseIterable, Identifiable {
         case .once, .untilStopped: nil
         }
     }
+}
+
+// MARK: - Shortcuts
+
+enum HotkeyAction: String, Codable, CaseIterable, Identifiable {
+    case toggle, openPopover, stop
+
+    var id: String { rawValue }
+
+    var title: String {
+        switch self {
+        case .toggle:      "Start / pause"
+        case .openPopover: "Open timer"
+        case .stop:        "Stop"
+        }
+    }
+}
+
+struct Hotkey: Codable, Equatable {
+    var keyCode: UInt32
+    /// Carbon modifier mask (cmdKey, optionKey, …).
+    var modifiers: UInt32
+    var display: String
 }

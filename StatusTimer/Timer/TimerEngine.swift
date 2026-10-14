@@ -27,7 +27,11 @@ final class TimerEngine: ObservableObject {
     private(set) var activePlaylist: Playlist?
     /// Overtime stops counting after an hour, so a forgotten timer doesn't tick all night.
     static let overtimeLimit: TimeInterval = 3600
-    private var timerCancellable: AnyCancellable?
+    /// Fires once, exactly when the countdown ends.
+    private var endTimer: Timer?
+    /// Fires once a second, just after the shown time changes. Off while the screen sleeps.
+    private var displayTimer: Timer?
+    private var isDisplayAsleep = false
     private var pausedRemaining: TimeInterval = 0
     private var finishedAt: Date?
     private var activity: NSObjectProtocol?
@@ -246,21 +250,82 @@ final class TimerEngine: ObservableObject {
         persist()
     }
 
-    /// 0.25 s with App Nap held off while counting down; overtime is a lazy 1 s tick.
-    private func startTicking(every interval: TimeInterval = 0.25, holdActivity: Bool = true) {
-        timerCancellable?.cancel()
-        if holdActivity { beginActivity() }
-        timerCancellable = Timer.publish(every: interval, on: .main, in: .common)
-            .autoconnect()
-            .sink { [weak self] now in
-                self?.tick(now)
-            }
+    /// No polling: one precise timer for the end, plus a once-a-second display tick
+    /// lined up with the second boundaries, so the app wakes only when something changes.
+    private func startTicking() {
+        stopTicking()
+        guard let endDate else { return }
+        beginActivity()
+        endTimer = makeTimer(fire: endDate, every: nil, tolerance: 0) { engine in
+            guard engine.state == .running, let end = engine.endDate else { return }
+            engine.finish(at: end)
+        }
+        startDisplayTicks()
     }
 
     private func stopTicking() {
-        timerCancellable?.cancel()
-        timerCancellable = nil
+        endTimer?.invalidate()
+        endTimer = nil
+        stopDisplayTicks()
         endActivity()
+    }
+
+    /// The shown time counts whole seconds from this date: the end while running,
+    /// the finish while counting overtime.
+    private var tickReference: Date? {
+        switch state {
+        case .running:  endDate
+        case .finished: store.prefs.overtime && overtimeSeconds < Self.overtimeLimit ? finishedAt : nil
+        case .idle, .paused: nil
+        }
+    }
+
+    private func startDisplayTicks() {
+        stopDisplayTicks()
+        guard !isDisplayAsleep, let reference = tickReference else { return }
+        let now = Date()
+        let offset = now.timeIntervalSince(reference)
+        var untilNextSecond = offset.rounded(.up) - offset
+        if untilNextSecond < 0.01 { untilNextSecond += 1 }
+        // A hair past the boundary, so the new second is what gets shown.
+        displayTimer = makeTimer(fire: now.addingTimeInterval(untilNextSecond + 0.01), every: 1, tolerance: 0.05) {
+            $0.tick(Date())
+        }
+    }
+
+    private func stopDisplayTicks() {
+        displayTimer?.invalidate()
+        displayTimer = nil
+    }
+
+    /// While the screen is off nobody can see the seconds, so only the end timer stays.
+    func setDisplayAsleep(_ asleep: Bool) {
+        guard asleep != isDisplayAsleep else { return }
+        isDisplayAsleep = asleep
+        if asleep {
+            stopDisplayTicks()
+        } else {
+            tick(Date())
+            startDisplayTicks()
+        }
+    }
+
+    private func makeTimer(
+        fire date: Date,
+        every interval: TimeInterval?,
+        tolerance: TimeInterval,
+        action: @escaping @MainActor @Sendable (TimerEngine) -> Void
+    ) -> Timer {
+        let timer = Timer(fire: date, interval: interval ?? 0, repeats: interval != nil) { [weak self] _ in
+            // Scheduled on the main run loop.
+            MainActor.assumeIsolated {
+                guard let self else { return }
+                action(self)
+            }
+        }
+        timer.tolerance = tolerance
+        RunLoop.main.add(timer, forMode: .common)
+        return timer
     }
 
     private func tick(_ now: Date) {
@@ -276,13 +341,14 @@ final class TimerEngine: ObservableObject {
         case .finished:
             guard let finishedAt else { return }
             overtimeSeconds = min(max(0, now.timeIntervalSince(finishedAt)), Self.overtimeLimit)
-            if overtimeSeconds >= Self.overtimeLimit { stopTicking() }
+            if overtimeSeconds >= Self.overtimeLimit { stopDisplayTicks() }
         case .idle, .paused:
             break
         }
     }
 
     private func finish(at end: Date) {
+        stopTicking()
         remainingSeconds = 0
         endDate = nil
 
@@ -299,15 +365,15 @@ final class TimerEngine: ObservableObject {
         finishedAt = end
         overtimeSeconds = min(max(0, Date().timeIntervalSince(end)), Self.overtimeLimit)
         state = .finished
-        stopTicking()
-        if store.prefs.overtime { startTicking(every: 1, holdActivity: false) }
+        // Overtime is display only: it doesn't hold off App Nap.
+        startDisplayTicks()
         persist()
         onTimerComplete?(TimerCompletion(label: currentSegmentLabel, next: nextSegment, autoAdvanced: false))
     }
 
     // MARK: - App Nap
 
-    /// Keeps App Nap from stretching the 0.25 s tick while a timer is live.
+    /// Keeps App Nap from delaying the end of a running countdown.
     private func beginActivity() {
         guard activity == nil else { return }
         activity = ProcessInfo.processInfo.beginActivity(

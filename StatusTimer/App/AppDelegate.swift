@@ -7,7 +7,9 @@ import UserNotifications
 @MainActor
 final class AppDelegate: NSObject, NSApplicationDelegate {
     private var statusItem: NSStatusItem!
+    private var statusItemController: StatusItemController?
     private var popover: NSPopover!
+    private var popoverContent: NSHostingController<AnyView>!
     private let store = UserDefaultsStore.shared
     private let engine = TimerEngine()
     private let audio = AudioManager()
@@ -33,6 +35,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         setupPopover()
         setupCallbacks()
         setupNotifications()
+        setupHotkeys()
+        observeDisplaySleep()
         isLaunched = true
         pendingURLs.forEach(handleURL)
         pendingURLs = []
@@ -53,11 +57,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         button.target = self
         button.sendAction(on: [.leftMouseUp, .rightMouseUp])
         button.setAccessibilityLabel("Elapsed timer")
-
-        let hostingView = NSHostingView(rootView: StatusBarLabel(engine: engine).environmentObject(store))
-        hostingView.frame = NSRect(x: 0, y: 0, width: 72, height: 22)
-        button.addSubview(hostingView)
-        button.frame = hostingView.frame
+        statusItemController = StatusItemController(button: button, engine: engine, store: store)
     }
 
     private func setupPopover() {
@@ -65,9 +65,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         popover.contentSize = NSSize(width: 320, height: 190)
         popover.behavior = .transient
         popover.animates = false
-        popover.contentViewController = NSHostingController(
-            rootView: TimerPopoverView(engine: engine).environmentObject(store)
-        )
+        popover.delegate = self
+        popoverContent = NSHostingController(rootView: Self.popoverPlaceholder)
+        popover.contentViewController = popoverContent
+    }
+
+    /// While the popover is closed its content is this, so a running timer
+    /// doesn't keep re-rendering a view nobody can see.
+    private static var popoverPlaceholder: AnyView {
+        AnyView(Color.clear.frame(width: 320, height: 190))
     }
 
     private func setupCallbacks() {
@@ -103,6 +109,35 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             .store(in: &cancellables)
     }
 
+    private func setupHotkeys() {
+        HotkeyManager.shared.onAction = { [weak self] action in
+            self?.performHotkey(action)
+        }
+        store.$prefs
+            .map(\.hotkeys)
+            .removeDuplicates()
+            .sink { HotkeyManager.shared.register($0) }
+            .store(in: &cancellables)
+    }
+
+    /// Nobody sees the seconds while the screen is off or another user is logged in.
+    private func observeDisplaySleep() {
+        let center = NSWorkspace.shared.notificationCenter
+        let changes: [(Notification.Name, Bool)] = [
+            (NSWorkspace.screensDidSleepNotification, true),
+            (NSWorkspace.screensDidWakeNotification, false),
+            (NSWorkspace.sessionDidResignActiveNotification, true),
+            (NSWorkspace.sessionDidBecomeActiveNotification, false),
+        ]
+        for (name, asleep) in changes {
+            center.addObserver(forName: name, object: nil, queue: .main) { [weak self] _ in
+                MainActor.assumeIsolated {
+                    self?.engine.setDisplayAsleep(asleep)
+                }
+            }
+        }
+    }
+
     // MARK: - Clicks
 
     @objc private func handleClick() {
@@ -119,6 +154,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private func openPopover() {
         guard let button = statusItem.button else { return }
         if popover.isShown { return }
+        popoverContent.rootView = AnyView(TimerPopoverView(engine: engine).environmentObject(store))
         popover.show(relativeTo: button.bounds, of: button, preferredEdge: .minY)
         popover.contentViewController?.view.window?.makeKey()
 
@@ -201,6 +237,19 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         return true
     }
 
+    // MARK: - Shortcuts
+
+    private func performHotkey(_ action: HotkeyAction) {
+        switch action {
+        case .toggle:
+            engine.toggleFromStatusBar()
+        case .openPopover:
+            if popover.isShown { closePopover() } else { openPopover() }
+        case .stop:
+            engine.cancel()
+        }
+    }
+
     // MARK: - Timer Window
 
     private func toggleTimerWindow() {
@@ -226,6 +275,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             })
             .environmentObject(store)
         )
+        w.delegate = self
 
         NSApp.activate(ignoringOtherApps: true)
         w.makeKeyAndOrderFront(nil)
@@ -248,6 +298,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 .environmentObject(store)
             )
             w.collectionBehavior = [.moveToActiveSpace, .fullScreenAuxiliary]
+            w.delegate = self
             settingsWindow = w
         }
         NSApp.activate(ignoringOtherApps: true)
@@ -365,6 +416,23 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         default:
             break
         }
+    }
+}
+
+extension AppDelegate: NSPopoverDelegate {
+    func popoverDidClose(_ notification: Notification) {
+        popoverContent.rootView = Self.popoverPlaceholder
+        removeEventMonitor()
+        removeKeyMonitor()
+    }
+}
+
+extension AppDelegate: NSWindowDelegate {
+    /// Closed windows are let go so they stop observing the timer; the timer window's frame is autosaved.
+    func windowWillClose(_ notification: Notification) {
+        guard let window = notification.object as? NSWindow else { return }
+        if window === timerWindow { timerWindow = nil }
+        if window === settingsWindow { settingsWindow = nil }
     }
 }
 

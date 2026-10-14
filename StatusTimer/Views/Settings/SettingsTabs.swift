@@ -80,13 +80,13 @@ struct LookSettingsTab: View {
             withAnimation(.spring(duration: 0.2)) { store.prefs.statusStyle = style }
         } label: {
             VStack(spacing: 7) {
-                StatusBarFace(
+                Image(nsImage: StatusBarFace(
                     text: "14:59",
                     style: style,
                     state: .running,
                     progress: 0.4,
                     accent: store.prefs.focusAccent
-                )
+                ).image())
 
                 Text(style.rawValue)
                     .font(.system(size: 10, weight: isSelected ? .semibold : .regular))
@@ -207,6 +207,15 @@ struct GeneralSettingsTab: View {
                 }
             }
 
+            SettingsSection(title: "Shortcuts") {
+                ForEach(Array(HotkeyAction.allCases.enumerated()), id: \.element) { index, action in
+                    if index > 0 { SettingsDivider() }
+                    SettingsRow(label: action.title) {
+                        HotkeyRecorder(hotkey: hotkeyBinding(action))
+                    }
+                }
+            }
+
             HStack(spacing: 4) {
                 Text(version)
                     .font(.system(size: 10))
@@ -249,5 +258,23 @@ struct GeneralSettingsTab: View {
         withAnimation(.spring(duration: 0.2)) {
             loginStatus = SMAppService.mainApp.status
         }
+    }
+
+    /// Recording a combo that another action already uses moves it here.
+    private func hotkeyBinding(_ action: HotkeyAction) -> Binding<Hotkey?> {
+        Binding(
+            get: { store.prefs.hotkeys[action.rawValue] },
+            set: { newValue in
+                var hotkeys = store.prefs.hotkeys
+                if let newValue {
+                    for (key, existing) in hotkeys
+                    where existing.keyCode == newValue.keyCode && existing.modifiers == newValue.modifiers {
+                        hotkeys[key] = nil
+                    }
+                }
+                hotkeys[action.rawValue] = newValue
+                store.prefs.hotkeys = hotkeys
+            }
+        )
     }
 }
