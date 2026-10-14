@@ -6,13 +6,16 @@ struct TimerSliderView: View {
     let progress: Double
     @Binding var showCustomInput: Bool
     var isBreak: Bool = false
+    /// Called when the custom field gets a clock time like "@14:30".
+    var onStartUntil: ((Date) -> Void)? = nil
 
+    @EnvironmentObject private var store: UserDefaultsStore
     @State private var dragFraction: Double? = nil
     @State private var isDragging = false
     @State private var customTimeText = ""
     @FocusState private var isCustomInputFocused: Bool
 
-    private let maxSliderMinutes = 120
+    private var maxSliderMinutes: Int { store.prefs.sliderMaxMinutes }
     private let barCount = 60
     private let barWidth: CGFloat = 2
     private let barHeightMin: CGFloat = 8
@@ -37,7 +40,8 @@ struct TimerSliderView: View {
                         let height = barHeightMin + (barHeightMax - barHeightMin) * growFactor
 
                         let isFilled = barFraction <= visualFraction
-                        let filledColor: Color = isBreak ? .blue.opacity(0.6) : .red.opacity(0.7)
+                        let filledColor: Color = store.prefs.accent(for: isBreak ? .rest : .focus)
+                            .opacity(isBreak ? 0.6 : 0.7)
                         let barColor: Color = isRunning
                             ? (isFilled ? filledColor : Color.white.opacity(0.12))
                             : (isFilled ? Color.white.opacity(0.75) : Color.white.opacity(0.12))
@@ -87,11 +91,11 @@ struct TimerSliderView: View {
                         .font(.system(size: 11, weight: .regular))
                         .foregroundStyle(Color.white.opacity(0.4))
 
-                    TextField("150 or 2:30", text: $customTimeText)
+                    TextField("90, 1:30 or @14:30", text: $customTimeText)
                         .textFieldStyle(.plain)
                         .font(.system(size: 12, weight: .medium, design: .monospaced))
                         .foregroundStyle(Color.white)
-                        .frame(width: 80)
+                        .frame(width: 130)
                         .padding(.horizontal, 8)
                         .padding(.vertical, 4)
                         .background(Color.white.opacity(0.08))
@@ -110,15 +114,17 @@ struct TimerSliderView: View {
     }
 
     private func applyCustomTime() {
-        let trimmed = customTimeText.trimmingCharacters(in: .whitespaces)
-
-        if trimmed.contains(":") {
-            let parts = trimmed.split(separator: ":")
-            if parts.count == 2, let h = Int(parts[0]), let m = Int(parts[1]) {
-                minutes = max(1, min(h * 60 + m, 1440))
+        switch TimeInputParser.parse(customTimeText) {
+        case .minutes(let m):
+            minutes = m
+        case .until(let date):
+            customTimeText = ""
+            withAnimation(.spring(duration: 0.25)) {
+                showCustomInput = false
             }
-        } else if let m = Int(trimmed) {
-            minutes = max(1, min(m, 1440))
+            onStartUntil?(date)
+        case nil:
+            NSSound.beep()
         }
     }
 }

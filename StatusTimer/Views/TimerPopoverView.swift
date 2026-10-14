@@ -2,14 +2,11 @@ import SwiftUI
 
 struct TimerPopoverView: View {
     @ObservedObject var engine: TimerEngine
+    @EnvironmentObject private var store: UserDefaultsStore
     @State private var showCustomInput = false
-    @State private var showSettings = false
-    @State private var playlists: [Playlist] = UserDefaultsStore.shared.playlists
     @State private var scrubHovered = false
     @State private var scrubFraction: CGFloat = 0
     @State private var scrollTarget: Int?
-
-    private let presets = TimerPreset.defaults
 
     var body: some View {
         ZStack {
@@ -38,11 +35,6 @@ struct TimerPopoverView: View {
         }
         .frame(width: 320, height: 190)
         .animation(.spring(duration: 0.3), value: engine.state)
-        .sheet(isPresented: $showSettings, onDismiss: {
-            playlists = UserDefaultsStore.shared.playlists
-        }) {
-            SettingsView()
-        }
     }
 
     // MARK: - Idle View
@@ -53,28 +45,33 @@ struct TimerPopoverView: View {
                 minutes: $engine.selectedMinutes,
                 isRunning: false,
                 progress: 0,
-                showCustomInput: $showCustomInput
+                showCustomInput: $showCustomInput,
+                onStartUntil: { date in
+                    withAnimation(.spring(duration: 0.25)) { engine.start(until: date) }
+                }
             )
 
-            Rectangle()
-                .fill(Color.white.opacity(0.08))
-                .frame(height: 1)
-                .padding(.vertical, 10)
+            if store.prefs.showPresets {
+                Rectangle()
+                    .fill(Color.white.opacity(0.08))
+                    .frame(height: 1)
+                    .padding(.vertical, 10)
 
-            // Presets
-            HStack(spacing: 0) {
-                ForEach(presets) { preset in
-                    HoverButton {
-                        withAnimation(.spring(duration: 0.2)) {
-                            engine.selectedMinutes = preset.minutes
-                            showCustomInput = false
+                // Presets
+                HStack(spacing: 0) {
+                    ForEach(store.prefs.presets, id: \.self) { minutes in
+                        HoverButton {
+                            withAnimation(.spring(duration: 0.2)) {
+                                engine.selectedMinutes = minutes
+                                showCustomInput = false
+                            }
+                        } label: {
+                            Text("\(minutes)")
+                                .font(.system(size: 11, weight: engine.selectedMinutes == minutes ? .semibold : .regular))
+                                .foregroundStyle(engine.selectedMinutes == minutes ? Color.white : Color.white.opacity(0.35))
+                                .frame(maxWidth: .infinity, minHeight: 28)
+                                .contentShape(Rectangle())
                         }
-                    } label: {
-                        Text(preset.label)
-                            .font(.system(size: 11, weight: engine.selectedMinutes == preset.minutes ? .semibold : .regular))
-                            .foregroundStyle(engine.selectedMinutes == preset.minutes ? Color.white : Color.white.opacity(0.35))
-                            .frame(maxWidth: .infinity, minHeight: 28)
-                            .contentShape(Rectangle())
                     }
                 }
             }
@@ -83,11 +80,13 @@ struct TimerPopoverView: View {
 
             // Bottom row
             HStack(alignment: .center, spacing: 8) {
-                // Scrollable playlist carousel
-                playlistCarousel
+                if store.prefs.showPlaylists {
+                    // Scrollable playlist carousel
+                    playlistCarousel
 
-                // Scrub bar
-                playlistScrubBar
+                    // Scrub bar
+                    playlistScrubBar
+                }
 
                 // Utility buttons
                 VStack(spacing: 4) {
@@ -99,15 +98,17 @@ struct TimerPopoverView: View {
                             .foregroundStyle(Color.white.opacity(0.25))
                             .frame(width: 20, height: 20)
                     }
+                    .accessibilityLabel("Floating window")
 
                     HoverButton {
-                        showSettings = true
+                        engine.onOpenSettings?()
                     } label: {
                         Image(systemName: "gearshape")
                             .font(.system(size: 10))
                             .foregroundStyle(Color.white.opacity(0.25))
                             .frame(width: 20, height: 20)
                     }
+                    .accessibilityLabel("Settings")
                 }
 
                 Spacer()
@@ -122,21 +123,29 @@ struct TimerPopoverView: View {
                         .background(Color.white.opacity(0.08))
                         .clipShape(Circle())
                 }
+                .accessibilityLabel("Start")
 
-                Text(engine.idleDisplayTime)
-                    .font(Font.helveticaNeue(size: 36))
-                    .monospacedDigit()
-                    .foregroundStyle(Color.white.opacity(0.85))
-                    .shadow(color: Color.white.opacity(0.1), radius: 10, y: 0)
-                    .contentTransition(.numericText())
-                    .animation(.spring(duration: 0.2), value: engine.selectedMinutes)
-                    .fixedSize()
+                // Click the time to type one: "90", "1:30", "@14:30"
+                HoverButton {
+                    withAnimation(.spring(duration: 0.25)) {
+                        showCustomInput.toggle()
+                    }
+                } label: {
+                    Text(engine.idleDisplayTime)
+                        .font(Font.helveticaNeue(size: 36))
+                        .monospacedDigit()
+                        .foregroundStyle(Color.white.opacity(0.85))
+                        .shadow(color: Color.white.opacity(0.1), radius: 10, y: 0)
+                        .contentTransition(.numericText())
+                        .animation(.spring(duration: 0.2), value: engine.selectedMinutes)
+                        .fixedSize()
+                }
             }
         }
     }
 
     private var playlistCarousel: some View {
-        let enabled = playlists.enumerated().filter { $0.element.isEnabled }
+        let enabled = store.playlists.enumerated().filter { $0.element.isEnabled }
         return ScrollViewReader { proxy in
             ScrollView(.vertical, showsIndicators: false) {
                 VStack(alignment: .leading, spacing: 3) {
@@ -176,7 +185,7 @@ struct TimerPopoverView: View {
     }
 
     private var playlistScrubBar: some View {
-        let enabled = playlists.enumerated().filter { $0.element.isEnabled }
+        let enabled = store.playlists.enumerated().filter { $0.element.isEnabled }
         let count = enabled.count
 
         return GeometryReader { geo in

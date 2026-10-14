@@ -2,6 +2,7 @@ import SwiftUI
 
 struct ActiveTimerView: View {
     @ObservedObject var engine: TimerEngine
+    @EnvironmentObject private var store: UserDefaultsStore
 
     var body: some View {
         VStack(spacing: 14) {
@@ -41,13 +42,16 @@ struct ActiveTimerView: View {
                         .foregroundStyle(Color.white.opacity(0.35))
                         .frame(width: 24, height: 24)
                 }
+                .accessibilityLabel("Floating window")
 
                 Spacer()
 
-                if !engine.currentSegmentLabel.isEmpty {
-                    Text(engine.currentSegmentLabel)
+                // Segment name, "until 14:30" or "ends 14:55"
+                if !engine.contextLabel.isEmpty {
+                    Text(engine.contextLabel)
                         .font(.system(size: 11, weight: .regular))
                         .foregroundStyle(Color.white.opacity(0.35))
+                        .lineLimit(1)
                 }
             }
 
@@ -72,7 +76,7 @@ struct ActiveTimerView: View {
                     .font(Font.helveticaNeue(size: 42))
                     .monospacedDigit()
                     .foregroundStyle(Color.white.opacity(0.85))
-                    .shadow(color: (engine.isBreakSegment ? Color.blue : Color.red).opacity(0.15), radius: 10, y: 0)
+                    .shadow(color: store.prefs.accent(for: engine.currentSegmentKind).opacity(0.15), radius: 10, y: 0)
                     .contentTransition(.numericText())
                     .animation(.linear(duration: 0.1), value: engine.displayTime)
             }

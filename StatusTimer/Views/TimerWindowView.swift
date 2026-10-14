@@ -3,6 +3,7 @@ import SwiftUI
 struct TimerWindowView: View {
     @ObservedObject var engine: TimerEngine
     var onClose: (() -> Void)?
+    @EnvironmentObject private var store: UserDefaultsStore
     @State private var isHovered = false
     @State private var autoCloseTask: Task<Void, Never>?
 
@@ -18,9 +19,9 @@ struct TimerWindowView: View {
                 VStack(spacing: 0) {
                     Spacer(minLength: 12)
 
-                    // Segment label at top
-                    if !engine.currentSegmentLabel.isEmpty && engine.state != .idle {
-                        Text(engine.currentSegmentLabel)
+                    // Segment name, "until 14:30" or "ends 14:55" at top
+                    if !engine.contextLabel.isEmpty && engine.state != .idle {
+                        Text(engine.contextLabel)
                             .font(.system(size: max(11, timeSize * 0.16), weight: .regular))
                             .foregroundStyle(Color.white.opacity(0.4))
                             .padding(.bottom, 4)
@@ -49,6 +50,19 @@ struct TimerWindowView: View {
                                 .font(.system(size: max(11, timeSize * 0.16)))
                                 .foregroundStyle(Color.white.opacity(0.3))
                                 .padding(.top, 4)
+                        }
+
+                        if store.prefs.windowShowsBars {
+                            TimerSliderView(
+                                minutes: .constant(engine.selectedMinutes),
+                                isRunning: true,
+                                progress: engine.progress,
+                                showCustomInput: .constant(false),
+                                isBreak: engine.isBreakSegment
+                            )
+                            .allowsHitTesting(false)
+                            .padding(.horizontal, 24)
+                            .padding(.top, 6)
                         }
                     }
 
@@ -80,6 +94,7 @@ struct TimerWindowView: View {
                             .clipShape(Circle())
                     }
                     .buttonStyle(.plain)
+                    .accessibilityLabel("Close")
                     .animation(.easeInOut(duration: 0.15), value: isHovered)
                     .padding(.leading, 10)
                     .padding(.top, 10)
@@ -110,46 +125,80 @@ struct TimerWindowView: View {
 
     private func finishedView(timeSize: CGFloat) -> some View {
         VStack(spacing: timeSize * 0.15) {
-            Text("0:00")
+            Text(engine.displayTime)
                 .font(Font.helveticaNeue(size: timeSize))
                 .monospacedDigit()
                 .foregroundStyle(Color.white.opacity(0.85))
                 .shadow(color: Color.white.opacity(0.2), radius: 14, y: 0)
+                .contentTransition(.numericText())
+                .animation(.linear(duration: 0.1), value: engine.displayTime)
 
-            HStack(spacing: 12) {
-                if engine.activePlaylistIndex != nil && engine.hasMoreSegments {
-                    HoverButton {
-                        withAnimation(.spring(duration: 0.25)) {
-                            autoCloseTask?.cancel()
-                            engine.advancePlaylist()
-                        }
-                    } label: {
-                        Text("continue")
-                            .font(.system(size: 15, weight: .regular))
-                            .foregroundStyle(Color.white.opacity(0.7))
-                            .frame(width: 100, height: 38)
-                            .background(Color.white.opacity(0.1))
-                            .clipShape(Capsule())
-                            .overlay(Capsule().strokeBorder(Color.white.opacity(0.1), lineWidth: 1))
-                    }
+            // Drops snooze, then continue, when the window is too narrow for all three.
+            ViewThatFits(in: .horizontal) {
+                HStack(spacing: 12) {
+                    if engine.hasMoreSegments { continueButton }
+                    stopButton
+                    snoozeButton
                 }
-
-                HoverButton {
-                    withAnimation(.spring(duration: 0.25)) {
-                        autoCloseTask?.cancel()
-                        engine.cancel()
-                    }
-                } label: {
-                    Text("stop")
-                        .font(.system(size: 17, weight: .medium))
-                        .foregroundStyle(Color.white.opacity(0.85))
-                        .frame(width: 110, height: 42)
-                        .background(Color.white.opacity(0.12))
-                        .clipShape(Capsule())
-                        .overlay(Capsule().strokeBorder(Color.white.opacity(0.15), lineWidth: 1))
+                HStack(spacing: 12) {
+                    if engine.hasMoreSegments { continueButton }
+                    stopButton
                 }
+                stopButton
             }
         }
+    }
+
+    private var continueButton: some View {
+        HoverButton {
+            withAnimation(.spring(duration: 0.25)) {
+                autoCloseTask?.cancel()
+                engine.advancePlaylist()
+            }
+        } label: {
+            Text("continue")
+                .font(.system(size: 15, weight: .regular))
+                .foregroundStyle(Color.white.opacity(0.7))
+                .frame(width: 100, height: 38)
+                .background(Color.white.opacity(0.1))
+                .clipShape(Capsule())
+                .overlay(Capsule().strokeBorder(Color.white.opacity(0.1), lineWidth: 1))
+        }
+    }
+
+    private var stopButton: some View {
+        HoverButton {
+            withAnimation(.spring(duration: 0.25)) {
+                autoCloseTask?.cancel()
+                engine.cancel()
+            }
+        } label: {
+            Text("stop")
+                .font(.system(size: 17, weight: .medium))
+                .foregroundStyle(Color.white.opacity(0.85))
+                .frame(width: 110, height: 42)
+                .background(Color.white.opacity(0.12))
+                .clipShape(Capsule())
+                .overlay(Capsule().strokeBorder(Color.white.opacity(0.15), lineWidth: 1))
+        }
+    }
+
+    private var snoozeButton: some View {
+        HoverButton {
+            withAnimation(.spring(duration: 0.25)) {
+                autoCloseTask?.cancel()
+                engine.snooze()
+            }
+        } label: {
+            Text("+\(store.prefs.snoozeMinutes)")
+                .font(.system(size: 15, weight: .regular))
+                .foregroundStyle(Color.white.opacity(0.7))
+                .frame(width: 56, height: 38)
+                .background(Color.white.opacity(0.1))
+                .clipShape(Capsule())
+                .overlay(Capsule().strokeBorder(Color.white.opacity(0.1), lineWidth: 1))
+        }
+        .accessibilityLabel("Snooze \(store.prefs.snoozeMinutes) minutes")
     }
 
     // MARK: - Hover Controls
@@ -206,6 +255,6 @@ struct TimerWindowView: View {
 
     private var shadowColor: Color {
         if engine.state == .finished { return .white }
-        return engine.isBreakSegment ? .blue : .red
+        return store.prefs.accent(for: engine.currentSegmentKind)
     }
 }
