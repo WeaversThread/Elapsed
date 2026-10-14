@@ -19,7 +19,7 @@ Rams' ten principles distilled for software:
 
 ## Color System
 
-All colors are white at varying opacities on dark glass. No hue except functional color (red = active, blue = rest).
+All colors are white at varying opacities on dark glass. The only hue is functional: one accent for focus, one for rest. The user picks each from a curated set of swatches (red, Braun orange, yellow, green, teal, blue, violet, white) — never a free color picker. Defaults are red and blue.
 
 ### Opacity Scale
 
@@ -39,18 +39,26 @@ All colors are white at varying opacities on dark glass. No hue except functiona
 
 | Color | Value | Usage |
 |-------|-------|-------|
-| Active/Work | `red @ 0.7` (fill), `red @ 0.15` (shadow) | Running slider bars, time glow |
-| Break/Rest | `blue @ 0.6` (fill), `blue @ 0.15` (shadow) | Break segment slider, time glow |
+| Focus | `focusAccent @ 0.7` (fill), `@ 0.15` (shadow) | Running slider bars, time glow, progress capsule |
+| Rest | `restAccent @ 0.6` (fill), `@ 0.15` (shadow) | Rest segment slider, time glow |
 | Finished | `white @ 0.2` (shadow) | Completion glow on 0:00 |
 
 ### Status Bar States
+
+Three styles, chosen in Settings › Look. Idle is the same outline in Capsule and Progress.
+
+**Capsule** (default)
 
 | State | Fill | Text |
 |-------|------|------|
 | Idle | Stroke `white(0.7) @ 0.5`, 1px | `white(0.85)` |
 | Running | Fill `white @ 0.85` | `white(0.08)` (dark) |
 | Paused | Blink `white @ 0.3` / `white @ 0.5` | `white(0.08)` (dark) |
-| Finished | Fill `white @ 0.85` | `white(0.08)` (dark), shows "0:00" |
+| Finished | Fill `white @ 0.85` | `white(0.08)` (dark), shows "+0:42" overtime or "0:00" |
+
+**Progress** — track `white @ 0.18`; the accent (`@ 0.75`) fills left to right as time elapses; paused blinks the fill; finished is fully filled. Text `white(0.97)` with a 1px dark shadow.
+
+**Minimal** — text only, no capsule. Idle `@ 0.6`, paused blinks the text.
 
 ---
 
@@ -69,7 +77,10 @@ Two fonts only. Helvetica Neue Thin for numerals (the Braun clock face). SF Pro 
 | Playlist names | SF Pro | 10 | regular |
 | Segment labels | SF Pro | 11 | regular |
 | Utility labels | SF Pro | 10-11 | regular |
-| Settings headers | SF Pro | 13 | semibold |
+| Settings tabs | SF Pro | 12 | semibold (selected) / regular |
+| Settings section titles | SF Pro | 11 | medium |
+| Settings row labels | SF Pro | 12 | regular |
+| Settings details / footers | SF Pro | 10 | regular |
 | Settings fields | SF Pro | 11-12 | regular/medium |
 
 *Window time scales: `min(width * 0.35, height * 0.45)` for running, `min(width * 0.3, height * 0.35)` for finished.
@@ -117,6 +128,8 @@ No formal grid. Spacing is contextual but consistent within components.
 |---------|-------|
 | Popover outer padding | H: 20, V: 16 |
 | Settings outer padding | 18 all sides |
+| Settings section spacing | 16 |
+| Settings row padding | H: 10, V: 7 (min height 34) |
 | Component internal spacing | 0 (VStack) with explicit spacers |
 | Divider vertical margin | 10 |
 | Button internal padding | H: 4-6, V: 2-4 |
@@ -137,7 +150,7 @@ VisualEffectBlur
   state: .active
   appearance: .darkAqua
 ```
-Used on every surface — popover, settings sheet, floating window. Never a solid background.
+Used on every surface — popover, settings window, floating window. Never a solid background.
 
 ### HoverButton
 Scale: 1.0 -> 1.08, Brightness: 0 -> +0.15, Spring 0.2s bounce 0.3. Applied to every interactive element. No exceptions.
@@ -151,6 +164,23 @@ Fixed frame: 72x22 (item), 68x18 (capsule). Text auto-shrinks with `minimumScale
 ### Floating Window
 Borderless + resizable. Custom close button (x icon, appears on hover). No titlebar, no traffic lights. Movable by background. Floats above all windows. Content clips to `RoundedRectangle(cornerRadius: 10)` with subtle border stroke.
 
+### Glass Window
+`GlassWindow`: borderless `NSWindow` subclass with `canBecomeKey = true` (so text fields take typing), clear background, dark appearance, ⌘W and Esc close it. The floating timer window (`.floating`, frame autosaved) and the settings window (`.normal`) are both made by `GlassWindow.make`.
+
+### Settings Window
+380×460 glass panel, rounded 10, `white @ 0.12` border, hover-revealed close button top-left. A text tab row (Timer · Playlists · Look · Sound · General): selected `white @ 0.85` semibold, others `white @ 0.35`. Changes apply immediately — no Save, no Cancel.
+
+Building blocks:
+- **SettingsSection** — title, then rows on `white @ 0.06` rounded 6, optional footer `white @ 0.3`
+- **SettingsRow** — label left, control right; hairline dividers `white @ 0.06`
+- **GlassSwitch** — 28×16 capsule, `white @ 0.12` off / `white @ 0.7` on, knob inverts
+- **GlassChoice** — text options in a capsule, selected on `white @ 0.14`
+- **GlassStepper** — − value + with circular `white @ 0.08` buttons
+- **SwatchPicker** — 14pt accent circles, selected ringed `white @ 0.85`
+- **VolumeBars** — a rising wedge of 24 bars, the slider's language at small scale
+- **PresetEditor** — 30pt capsule chips you type into, × on hover, + to add (3–9)
+- **HotkeyRecorder** — capsule that reads "press keys" while recording
+
 ### Scrub Bar
 Vertical, 6px wide, 40px tall. Track: 1px `white @ 0.08`. Thumb: 3px wide rounded rect, `white @ 0.35`, appears on hover. Maps drag position to scroll target.
 
@@ -162,7 +192,7 @@ Vertical, 6px wide, 40px tall. Track: 1px `white @ 0.08`. Thumb: 3px wide rounde
 |---------|-------|--------|
 | Status bar item | 72 | 22 |
 | Popover | 320 | 190 |
-| Settings sheet | 320 | 400 |
+| Settings window | 380 | 460 |
 | Timer window (initial) | 280 | 160 |
 | Timer window (minimum) | 200 | 120 |
 | Play button | 30 | 30 |
@@ -197,22 +227,25 @@ Vertical, 6px wide, 40px tall. Track: 1px `white @ 0.08`. Thumb: 3px wide rounde
 - Callbacks (closures) for cross-layer communication (engine -> AppDelegate)
 
 ### Persistence
-- `UserDefaultsStore` singleton, `@unchecked Sendable`
-- JSON encoding for complex types (playlists)
-- Simple getters/setters for primitives
+- `UserDefaultsStore`: `@MainActor ObservableObject` singleton, injected with `.environmentObject` at every hosting root
+- `@Published` `prefs` (`prefs_v1`), `playlists` (`playlists_v2`), `lastUsedMinutes`; `snapshot_v1` holds a running or paused timer
+- JSON encoding for complex types; every field decodes with `decodeIfPresent` and a default, so new fields never wipe saved data
 
 ### App Structure
 - LSUIElement (no dock icon)
 - NSStatusItem + NSHostingView for status bar
 - NSPopover (transient, no animation) for menu
 - NSWindow (borderless, floating) for desktop view
-- SMAppService for login item
+- SMAppService for login item, toggled in Settings (never registered automatically)
+- Carbon `RegisterEventHotKey` for global shortcuts (no Accessibility permission)
+- `elapsed://` URL scheme for automation
 
 ### Build
 - Swift Package Manager, no Xcode project
-- Shell script creates .app bundle manually
+- Shell script creates .app bundle manually and ad-hoc signs it
 - Resources copied via SPM `.copy()` directive
-- Info.plist written by build script (no variable expansion)
+- Info.plist copied from `StatusTimer/Info.plist` (literal values, no variable expansion)
+- With only the Command Line Tools, build against the macOS 26 SDK (the CLT lack the SwiftUI macro plugin for the 27 SDK)
 
 ---
 
@@ -223,7 +256,7 @@ Vertical, 6px wide, 40px tall. Track: 1px `white @ 0.08`. Thumb: 3px wide rounde
 - No dock icon, no menu bar menu (right-click is for timer toggle)
 - No confirmation dialogs — actions are immediate and reversible
 - No tooltips — the UI is self-evident or it's wrong
-- No color outside red/blue functional meaning
+- No color outside the two functional accents (focus, rest)
 - No font outside Helvetica Neue Thin + SF Pro
 - No animation slower than 0.3s (except ambient blink)
 - No hover effects below 1.08x scale — it must be perceptible

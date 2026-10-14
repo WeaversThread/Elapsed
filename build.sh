@@ -1,7 +1,35 @@
 #!/bin/bash
+# Usage: bash build.sh [--install] [--zip]
+#   --install  quit Elapsed, replace /Applications/Elapsed.app, relaunch
+#   --zip      also write build/Elapsed-<version>.zip for a release
 set -e
 
 cd "$(dirname "$0")"
+
+INSTALL=0
+ZIP=0
+for arg in "$@"; do
+    case "$arg" in
+        --install) INSTALL=1 ;;
+        --zip)     ZIP=1 ;;
+        *) echo "Unknown option: $arg"; exit 1 ;;
+    esac
+done
+
+# Command Line Tools 27 don't ship the SwiftUI macro plugin the macOS 27 SDK needs
+# (@State fails with "SwiftUIMacros.StateMacro could not be found"), so build
+# against the 26 SDK when only the CLT are installed.
+if [ -z "$SDKROOT" ]; then
+    DEV_DIR="$(xcode-select -p 2>/dev/null || true)"
+    if [[ "$DEV_DIR" == *CommandLineTools* ]]; then
+        for sdk in "$DEV_DIR/SDKs/MacOSX26.5.sdk" "$DEV_DIR/SDKs/MacOSX26.sdk"; do
+            if [ -d "$sdk" ]; then
+                export SDKROOT="$sdk"
+                break
+            fi
+        done
+    fi
+fi
 
 echo "Building Elapsed..."
 swift build -c release
@@ -13,40 +41,35 @@ mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources"
 cp .build/release/Elapsed "$APP/Contents/MacOS/Elapsed"
 cp -r .build/release/Elapsed_Elapsed.bundle "$APP/Contents/Resources/"
 cp StatusTimer/Resources/AppIcon.icns "$APP/Contents/Resources/AppIcon.icns"
+cp StatusTimer/Info.plist "$APP/Contents/Info.plist"
 
-cat > "$APP/Contents/Info.plist" << 'PLIST'
-<?xml version="1.0" encoding="UTF-8"?>
-<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
-<plist version="1.0">
-<dict>
-    <key>CFBundleDevelopmentRegion</key>
-    <string>en</string>
-    <key>CFBundleExecutable</key>
-    <string>Elapsed</string>
-    <key>CFBundleIdentifier</key>
-    <string>com.endurance.Elapsed</string>
-    <key>CFBundleInfoDictionaryVersion</key>
-    <string>6.0</string>
-    <key>CFBundleIconFile</key>
-    <string>AppIcon</string>
-    <key>CFBundleName</key>
-    <string>Elapsed</string>
-    <key>CFBundlePackageType</key>
-    <string>APPL</string>
-    <key>CFBundleShortVersionString</key>
-    <string>1.0</string>
-    <key>CFBundleVersion</key>
-    <string>1</string>
-    <key>LSMinimumSystemVersion</key>
-    <string>15.0</string>
-    <key>LSUIElement</key>
-    <true/>
-    <key>NSUserNotificationAlertStyle</key>
-    <string>alert</string>
-</dict>
-</plist>
-PLIST
+# Ad-hoc signature: no developer account needed, but Gatekeeper still treats it as unsigned.
+codesign --force --deep -s - "$APP"
 
-echo "Built: $APP"
-echo ""
-echo "To install: cp -r $APP /Applications/"
+VERSION=$(/usr/libexec/PlistBuddy -c "Print :CFBundleShortVersionString" StatusTimer/Info.plist)
+echo "Built: $APP ($VERSION)"
+
+if [ "$ZIP" = 1 ]; then
+    ZIPFILE="build/Elapsed-$VERSION.zip"
+    rm -f "$ZIPFILE"
+    ditto -c -k --keepParent "$APP" "$ZIPFILE"
+    echo "Zipped: $ZIPFILE"
+fi
+
+if [ "$INSTALL" = 1 ]; then
+    osascript -e 'quit app "Elapsed"' 2>/dev/null || true
+    for _ in 1 2 3 4 5 6 7 8 9 10; do
+        pgrep -x Elapsed >/dev/null || break
+        sleep 0.3
+    done
+    pkill -x Elapsed 2>/dev/null || true
+    rm -rf /Applications/Elapsed.app
+    ditto "$APP" /Applications/Elapsed.app
+    # Register the elapsed:// URL scheme with Launch Services.
+    /System/Library/Frameworks/CoreServices.framework/Frameworks/LaunchServices.framework/Support/lsregister -f /Applications/Elapsed.app
+    open /Applications/Elapsed.app
+    echo "Installed and launched /Applications/Elapsed.app"
+else
+    echo ""
+    echo "To install: bash build.sh --install"
+fi
