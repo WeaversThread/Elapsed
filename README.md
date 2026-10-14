@@ -49,9 +49,9 @@ open "elapsed://start?min=25"
 
 ## Install
 
-Download `Elapsed-<version>.zip` from [Releases](https://github.com/WeaversThread/Elapsed/releases), unzip it and move `Elapsed.app` to `/Applications`.
+Download `Elapsed-<version>.dmg` from [Releases](https://github.com/WeaversThread/Elapsed/releases), open it and drag Elapsed to Applications. It runs on Apple silicon and Intel Macs with macOS 15 or later.
 
-The app is ad-hoc signed, not notarized, so macOS blocks the first launch. Right-click the app and choose **Open**, or clear the quarantine flag:
+Unless the release says it's notarized, macOS blocks the first launch. Right-click the app and choose **Open**, or clear the quarantine flag:
 
 ```bash
 xattr -dr com.apple.quarantine /Applications/Elapsed.app
@@ -65,7 +65,22 @@ Requires macOS 15+ and Swift 6. The Command Line Tools are enough; Xcode isn't n
 bash build.sh --install
 ```
 
-`build.sh` builds `build/Elapsed.app`. `--install` replaces `/Applications/Elapsed.app` and relaunches it, `--zip` also writes a release zip, and `--test` runs the tests instead. With only the Command Line Tools installed, the script builds against the macOS 26 SDK, because the CLT don't ship the SwiftUI macro plugin the macOS 27 SDK needs.
+| Command | Result |
+|---------|--------|
+| `bash build.sh` | `build/Elapsed.app` for this Mac |
+| `bash build.sh --install` | Same, then replaces `/Applications/Elapsed.app` and relaunches it |
+| `bash build.sh --test` | Runs the tests |
+| `bash build.sh --release` | For the web: a universal `build/Elapsed-<version>.dmg` and `.zip`. Signed with your Developer ID and notarized if the certificate is in your keychain, ad-hoc signed otherwise |
+| `bash build.sh --appstore` | For the Mac App Store: a universal, sandboxed `build/Elapsed-<version>.pkg` to upload with Transporter |
+
+With only the Command Line Tools installed, the script builds against the macOS 26 SDK, because the CLT don't ship the SwiftUI macro plugin the macOS 27 SDK needs.
+
+### Signing for distribution
+
+Both notarized web builds and App Store builds need a paid [Apple Developer](https://developer.apple.com/programs/) account.
+
+- **Web (notarized):** create a *Developer ID Application* certificate, then save notarization credentials once with `xcrun notarytool store-credentials elapsed-notary`. `--release` then signs, notarizes and staples.
+- **Mac App Store:** register the bundle ID `com.endurance.Elapsed`, create an *Apple Distribution* and a *Mac Installer Distribution* certificate and a Mac App Store provisioning profile, and save the profile as `Elapsed.provisionprofile` in the repo folder (it's git-ignored). `--appstore` signs with the sandbox entitlements and builds the `.pkg`. Raise `CFBundleVersion` in `StatusTimer/Info.plist` for every upload.
 
 ## License
 

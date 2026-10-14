@@ -57,7 +57,11 @@ struct StatusBarFace: Equatable {
             return
         }
 
-        switch style {
+        // A paused Progress capsule with little fill would barely show its breathing,
+        // so until 40% it breathes the whole capsule like the Capsule style.
+        let drawnStyle: StatusStyle = style == .progress && state == .paused && progress < 0.4 ? .capsule : style
+
+        switch drawnStyle {
         case .capsule:
             let alpha = state == .paused ? 0.3 + 0.2 * glow : (isDark ? 0.85 : 0.8)
             context.addPath(capsule)

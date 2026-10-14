@@ -52,7 +52,8 @@ final class AudioManager {
     private func loadSound(_ name: String) -> NSSound? {
         let url: URL?
         if name == AlarmSound.bundled {
-            url = Bundle.module.url(forResource: "alarm", withExtension: "mp3", subdirectory: "Resources")
+            // build.sh copies it into Contents/Resources.
+            url = Bundle.main.url(forResource: "alarm", withExtension: "mp3")
         } else {
             url = ["aiff", "aif", "caf", "wav"]
                 .map { Self.systemSoundsDirectory.appendingPathComponent(name).appendingPathExtension($0) }

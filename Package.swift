@@ -8,10 +8,9 @@ let package = Package(
         .executableTarget(
             name: "Elapsed",
             path: "StatusTimer",
-            exclude: ["Info.plist", "StatusTimer.entitlements"],
-            resources: [
-                .copy("Resources"),
-            ],
+            // build.sh copies Resources into the app bundle itself. A SwiftPM resource
+            // bundle is only found through this machine's build path, so it's not used.
+            exclude: ["Info.plist", "Resources", "Elapsed.entitlements", "Elapsed-AppStore.entitlements"],
             linkerSettings: [
                 .unsafeFlags([
                     "-Xlinker", "-sectcreate",

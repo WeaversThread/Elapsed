@@ -10,3 +10,6 @@ xcuserdata/
 # Personal working notes (kept local)
 docs/working-with-endurance.md
 docs/mistakes-and-lessons.md
+
+# Signing material (never commit)
+*.provisionprofile

@@ -244,8 +244,8 @@ Vertical, 6px wide, 40px tall. Track: 1px `white @ 0.08`. Thumb: 3px wide rounde
 
 ### Build
 - Swift Package Manager, no Xcode project
-- Shell script creates .app bundle manually and ad-hoc signs it
-- Resources copied via SPM `.copy()` directive
+- Shell script creates .app bundle manually and ad-hoc signs it; `--release` (universal, Developer ID + notarization when available) and `--appstore` (universal, sandboxed, `.pkg`)
+- Resources are copied into `Contents/Resources` and loaded from `Bundle.main` — a SwiftPM resource bundle is only found through the build machine's path
 - Info.plist copied from `StatusTimer/Info.plist` (literal values, no variable expansion)
 - With only the Command Line Tools, build against the macOS 26 SDK (the CLT lack the SwiftUI macro plugin for the 27 SDK)
 
